@@ -1,0 +1,10 @@
+1、复制并打开 holiday[year].xlsm 文件。
+   a、将文件名字中的年份修改正确
+   b、将其中一，二，三列的内容修改正确
+   c、点击Result按键，如果报错，请修改错误的日期。无误的话，会在G9单元格生成当年的假期的JSON串
+   d、保存
+2、复制并打开 holiday[year].json 文件。
+   a、将第一步的JSON串复制并替换到此文件中
+   b、保存
+3、将这两个文件放到 服务器的 路径 D:\webTool\MyDjango\Holiday 下
+4、运行 http://10.239.144.188:8088/addHoliday/?year=[year] 即可，参数需要修改

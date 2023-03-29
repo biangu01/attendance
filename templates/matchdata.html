@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <script type="text/javascript">
+        var serveURL = "http://10.239.144.188"
+    </script>
+    <meta charset="UTF-8">
+    <title>Match Attendance</title>
+    <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
+    <script type="text/javascript" src="/static/echarts-5.1.1/dist/echarts.min.js"></script>
+    <script>
+    //http://10.239.144.162/MyDjango//关闭权限后，放在静态资源里就可以访问了
+        $(function(){
+            var date = new Date();
+            var year = date.getFullYear();
+            var month = date.getMonth();
+            for( var i = 2021; i <=year; i++ )
+            {
+                $("#year").append('<option value="'+i+'">'+i+'</option>');
+            }
+            $("#year").val(year);
+            for( var i = 1; i <=month+1; i++ )
+            {
+                $("#month").append('<option value="'+i+'">'+i+'</option>');
+            }
+            $("#month").val(month);
+            var gs = new Array();
+            {% for emp, groupQS in emps_groups %}
+                {% for group in groupQS %}
+                    if( gs.indexOf( {{group.id}} )<0 ){
+                        gs.push( {{group.id}} );
+                        $("#group").append('<option value="{{group.id}}">{{group.name}}</option>')
+                    }
+                {% endfor %}
+            {% endfor %}
+            $("#group").val(gs[0]);
+            updateGroup();
+        });
+        function updateGroup(){
+            var groupNow = $("#group").val();
+            $("#emp").empty();
+            {% for emp, groupQS in emps_groups %}
+                {% for group in groupQS %}
+                    if( {{group.id}} == groupNow ){
+                        $("#emp").append('<option value="{{emp.emp_id}}">{{emp.name}}</option>')
+                    }
+                {% endfor %}
+            {% endfor %}
+
+        }
+        function updateMonth(){
+            $("#month").empty();
+            var year = $("#year").val();
+            var month = 12;
+            var date = new Date();
+            if( year == date.getFullYear() ){
+                month = date.getMonth()+1;
+            }
+            for( var i = 1; i <=month; i++ )
+            {
+                $("#month").append('<option value="'+i+'">'+i+'</option>');
+            }
+            $("#month").val(month);
+        }
+        function search(){
+            $.ajax({
+                url: serveURL+":8088/findAttendance",
+                type:"GET",
+                data:{
+                    empID : $("#emp").val(),
+                    year : $("#year").val(),
+                    month : $("#month").val()
+                },
+                // statusCode:{
+                //     208 : function(data){
+                //         alert(data);
+                //     }
+                // },
+                success:function(data,status,xhr){
+                    if(xhr.status == '208'){
+                        alert(data);
+                    }else{
+                        //$("#testSpan").text(data);
+                        //$("#testSpan").html(data);
+                        $("#mainTab").empty();
+                        var source = new Array();
+                        source.push(['日期','打卡记录','系统请假','系统记录','系统加班','法定工作时间']);
+                        var txtH = "";
+                        txtH += '<tr class="tabTH">';
+                        txtH += "<th>日期</th>";
+                        txtH += "<th>工作日/休息日</th>";
+                        txtH += "<th>上班打卡</th>";
+                        txtH += "<th>下班打卡</th>";
+                        txtH += "<th>打卡记录时长</th>";
+                        txtH += "<th>打卡结余</th>";
+                        txtH += '<th></th>';
+                        txtH += "<th>系统上班</th>";
+                        txtH += "<th>系统下班</th>";
+                        txtH += "<th>系统记录时长</th>";
+                        txtH += "<th>系统加班时长</th>";
+                        txtH += "<th>系统请假天数</th>";
+                        txtH += '<th></th>';
+                        txtH += "<th>打卡-系统时间差额</th>";
+                        txtH += "</tr>";
+                        $("#mainTab").append(txtH);
+                        var totalAttwh = 0
+                        var totalAttwhDay = 0
+                        var totalwh = 0
+                        var totalot = 0
+                        var totalleave = 0
+                        var totalwhDay9 = 0
+                        var totalwhDay8 = 0
+                        for( var i = 0 ; i < data["data"].length ; i++ ){
+                            var arr = new Array();
+                            var d = data["data"][i];
+                            var txt = "";
+                            var rowClass = "";
+                            if(i % 2 != 0){
+                                rowClass = "tabGray";
+                            }
+                            txt += '<tr class="'+rowClass+'">';
+                            if(d["noInfo"] != ""){
+                                txt += '<td>' + d['date'] + '</td>';
+                                txt += '<td colspan="13">' + d['noInfo'] + '</td>';
+                            }else{
+                                var attwhDay = d['attwhDay'];
+                                var div = d['div'];
+                                txt += '<td>' + d['date'] + '</td>';
+                                txt += '<td>' + d['dayType'] + '</td>';
+                                txt += '<td>' + d['attfirst'] + '</td>';
+                                txt += '<td>' + d['attlast'] + '</td>';
+                                txt += '<td>' + convertMinute(d['attwh']) + '</td>';
+                                totalAttwh += myIsNaN(d['attwh'])?d['attwh']:0
+                                txt += '<td ' + whStrColorClass(attwhDay,15) + '>' + d['attwhDay'] + '分钟</td>';
+                                totalAttwhDay += d['attwhDay']
+                                txt += '<td class="splitCell">' + '' + '</td>';
+                                txt += '<td>' + d['st'] + '</td>';
+                                txt += '<td>' + d['et'] + '</td>';
+                                txt += '<td>' + convertMinute(d['wh']) + '</td>';
+                                totalwh += myIsNaN(d['wh'])?d['wh']:0
+                                txt += '<td>' + showOT(d['ot']) + '</td>';
+                                totalot += d['ot']
+                                txt += '<td>' + showLeave(d['leave']) + '</td>';
+                                totalleave += d['leave']
+                                txt += '<td class="splitCell">' + '' + '</td>';
+                                txt += '<td ' + whStrColorClass(div,15) + '>' + d['div'] + '分钟</td>';
+                                txt += '</tr>';
+                                arr.push(d['date']);
+                                arr.push((d['attwh']/60).toFixed(1));
+                                arr.push(d['leave']*8);
+                                arr.push(((d['systemWH']-d['ot'])/60).toFixed(1));
+                                arr.push(d['ot']/60);
+                                if( d['dayType'] == '工作日' ){
+                                    arr.push(9);
+                                    //total按9小时算
+                                    totalwhDay9 += 9
+                                    totalwhDay8 += 8
+                                }else{
+                                    arr.push(0);
+                                    //totalwhDay += d['whDay'];
+                                }
+                                
+                                source.push(arr);
+                            }
+                            $("#mainTab").append(txt);
+                        }
+                        $("#totalwhDay").html("按9小时计算当月应工作时长：" + totalwhDay9 + "小时;<br/>" +
+                            "按8小时计算当月应工作时长：" + totalwhDay8 + "小时;");
+
+                        $("fieldset").css("padding-bottom","0px");
+                        //在加一个尾
+                        txt = ""
+                        txt += '<tr class="fixedTD">'
+                        txt += '<td colspan="2">总和</td>';
+                        txt += '<td></td>'
+                        txt += '<td></td>'
+                        txt += '<td>' + convertMinute(totalAttwh) + '</td>'
+                        txt += '<td></td>'//' + totalAttwhDay + '分钟
+                        txt += '<td></td>'
+                        txt += '<td></td>'
+                        txt += '<td></td>'
+                        txt += '<td>' + convertMinute(totalwh) + '</td>'
+                        txt += '<td>' + showOT(totalot) + '</td>'
+                        txt += '<td>' + showLeave(totalleave) + '</td>';
+                        txt += '<td></td>'
+                        txt += '<td></td>'
+                        txt += '</tr>';
+                        $("#mainTab").append(txt);
+                        //尾 结束
+                        //
+                        $("#tableDiv").css("display","block");
+
+                        //要先配置chart区域的宽和高
+                        $("#chart").css("width","100%");
+                        $("#chart").css("height","400px");
+                        // 基于准备好的dom，初始化echarts实例
+                        var myChart = echarts.init(document.getElementById('chart'));
+                        //var myChart = echarts.init($("#chart"));这个不能用jquery
+                        //alert(source);
+                        // 指定图表的配置项和数据
+                        var option = {
+                            title: {
+                                text: $("#emp option:selected").text() + '-' + $("#year").val() + "年" + $("#month").val() + "月 打卡记录"
+                            },
+                            tooltip: {},
+                            dataset: {
+                                //二位数组，第一行为x轴
+                                source: source
+                            },
+                            legend: {
+                                itemGap:40 //各个item之间的间隔，单位px，默认为10，
+                            },
+                            xAxis: {
+                                type:'category',
+                                name: "日期",
+                                nameLocation:'start',
+                                axisLabel: {rotate: 70, interval: 0},
+                                //data: ["衬衫","羊毛衫","雪纺衫","裤子","高跟鞋","袜子"]
+                            },
+                            yAxis: {
+                                name: "小时"
+                            },
+                            series: [
+                                {type: 'bar'},//打卡记录
+                                {//系统请假
+                                    type: 'bar',
+                                    stack: 'system',
+                                    itemStyle:{
+                                        normal:{
+                                            color:'red',
+                                        }
+                                    }
+                                },
+                                {//系统记录
+                                    type: 'bar',
+                                    stack: 'system',
+                                    itemStyle:{
+                                        normal:{
+                                            color:'lightgreen',
+                                        }
+                                    }
+                                },
+                                {//系统加班
+                                    type: 'bar',
+                                    stack: 'system',
+                                    itemStyle: {
+                                        normal: {
+                                            color: '#FA8072',
+                                            opacity:0.5,
+                                        }
+                                    },
+                                },
+                                {//法定工作时间
+                                    type: 'line',
+                                    color:'#DAA520',
+                                },
+                            ]
+                        };
+                 
+                        // 使用刚指定的配置项和数据显示图表。
+                        myChart.setOption(option);
+
+                        $("#mainTab tr").hover(function(){
+                            var row = $(this).index();
+                            if(row > 0){
+                                $(this).addClass('highlight');
+                                myChart.dispatchAction({
+                                    type:'highlight',
+                                    seriesIndex:[0,1,2,3],
+                                    dataIndex:row-1
+                                });
+                                myChart.dispatchAction({
+                                    type: 'showTip',
+                                    seriesIndex: 0,
+                                    dataIndex: row-1,
+                                    position:'top'
+                                });
+                            }
+                        });
+                        $("#mainTab tr").mouseleave(function(){
+                            var row = $(this).index();
+                            if(row > 0){
+                                $(this).removeClass('highlight');
+                                myChart.dispatchAction({
+                                    type:'downplay',
+                                    seriesIndex:[0,1,2,3],
+                                    dataIndex:row-1
+                                });
+                                myChart.dispatchAction({
+                                    type:'hideTip',
+                                });
+                            }
+                        });
+                    }
+                },
+                complete:function(){
+                }
+            });
+            return false
+        }
+        // true:数值型的，false：非数值型
+        function myIsNaN(value) {
+        return typeof value === 'number' && !isNaN(value);
+        }
+        function whStrColorClass(divSR,div){
+            var s = "";
+
+            if( divSR > div ){
+                s = 'class="whDarkGreen"'
+            }else if(divSR>0){
+                s = 'class="whGreen"'
+            }else if(divSR==0){
+                s = ""
+            }else if(divSR>0-div){
+                s = 'class="whRed"'
+            }else{
+                s = 'class="whDarkRed"'
+            }
+            return s;
+        }
+        function convertMinute(minutes){
+            var symbol = "";
+            if(minutes < 0){ symbol = "-"; }
+            var h = parseInt(minutes / 60);
+            var m = minutes % 60;
+            return symbol + h + "小时" + m + "分钟";
+        }
+        function showOT(ot){
+            return ot>0?(ot/60)+"小时":"";
+        }
+        function showLeave(leave){
+            return leave>0?leave+"天":"";
+        }
+    </script>
+    <style type="text/css">
+    .highlight{
+        /*background: lightgreen;*/
+        box-shadow: 3px 3px 5px grey;
+        border: 1px lightgreen;
+        outline-style: ridge;
+        outline-color: green;
+        outline-width: 2px;
+    }
+    .whDarkGreen{
+        color:darkgreen;
+    }
+    .whGreen{
+        color:green;
+    }
+    .whDarkRed{
+        color:darkred;
+        font-size: 18px;
+    }
+    .whRed{
+        color:red;
+    }
+    .tableDivClass{
+        margin: 10px;
+        text-align: center;
+    }
+    .tableClass{
+        margin: 0px;
+        -webkit-border-radius: 5px 5px 5px 5px;
+        -moz-border-radius: 5px 5px 5px 5px;
+        -o-border-radius: 5px 5px 5px 5px;
+        -ms-border-radius: 5px 5px 5px 5px;
+        border-radius: 5px 5px 5px 5px;
+        border: 1px;
+        border-style: outset;
+        border-collapse: collapse;
+        display: block;
+        height: 400px;
+        overflow-y: scroll;
+        table-layout: fixed;
+        width: 100%;
+    }
+    .tableClass th{
+        border-left: 1px solid white;
+        position: sticky;
+        top: 0px;
+        background-color: darkgray;
+    }
+    .fixedTD td{
+        border-left: 1px solid white;
+        position: sticky;
+        bottom: 0px;
+        background-color: darkgray;
+    }
+    .tableClass td, .tableClass th{
+        margin: 0px;
+        padding: 5px;
+    }
+    .tabTH{
+        background-color: darkgray;
+    }
+    .tabGray{
+        background-color: AliceBlue;
+    }
+    .splitCell{
+        border: 0px;
+        border-style: none ridge;
+        background-color: #9ACBE7;
+    }
+    .totalwhDay{
+        position: relative;
+        left: 100px;
+        color: red;
+        font-size: 17px;
+    }
+    .totalDiv{
+        position: relative;
+        float: right;
+        right: 216px;
+        top: -9px;
+    }
+    </style>
+</head>
+<body>
+<form action="" onsubmit="return search()">
+    <fieldset> 
+    <!-- style="padding-bottom: 0px;" -->
+        <legend>查询信息</legend>
+        所属分组：<select id="group" onchange="updateGroup()"></select> 员工：<select id="emp"></select>
+        年份：<select id="year" onchange="updateMonth()"></select> 月份：<select id="month"></select> <input type="submit" value="查询">
+        <div class="totalDiv">
+        <span id="totalwhDay" class="totalwhDay"></span>
+        </div>
+    </fieldset>
+</form>
+<div id="tableDiv" class="tableDivClass" style="display: none;">
+<table id="mainTab" class="tableClass" width="100%">
+</table>
+</div>
+<span id="testSpan"></span>
+<div id="chart"></div> 
+<!-- style="width: 100%;height:400px;" -->
+
+</body>
+</html>
